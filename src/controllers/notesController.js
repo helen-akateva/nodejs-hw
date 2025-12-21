@@ -6,25 +6,29 @@ import createHttpError from 'http-errors';
 export const getAllNotes = async (req, res) => {
   const { page = 1, perPage = 10, tag, search } = req.query;
 
-  const filter = {};
+  const skip = (page - 1) * perPage;
+
+  let notesQuery = Note.find();
+  let countQuery = Note.find();
 
   if (tag) {
-    filter.tag = tag;
+    notesQuery = notesQuery.where('tag').equals(tag);
+    countQuery = countQuery.where('tag').equals(tag);
   }
 
   if (search) {
-    filter.$text = { $search: search };
+    notesQuery = notesQuery.where({ $text: { $search: search } });
+    countQuery = countQuery.where({ $text: { $search: search } });
   }
 
-  const totalNotes = await Note.countDocuments(filter);
+  notesQuery = notesQuery.skip(skip).limit(perPage).sort({ createdAt: -1 });
+
+  const [notes, totalNotes] = await Promise.all([
+    notesQuery.exec(),
+    countQuery.countDocuments(),
+  ]);
 
   const totalPages = Math.ceil(totalNotes / perPage);
-
-  const skip = (page - 1) * perPage;
-  const notes = await Note.find(filter)
-    .skip(skip)
-    .limit(perPage)
-    .sort({ createdAt: -1 });
 
   res.status(200).json({
     page: Number(page),
